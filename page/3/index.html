@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Luke Craig&#x27;s Blog</title>
+    
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <meta name="robots" content="noodp"/>
+
+    <link rel="stylesheet" href="https://www.lukecraig.com/style.css">
+    <link rel="stylesheet" href="https://www.lukecraig.com/color/red.css">
+
+        <link rel="stylesheet" href="https://www.lukecraig.com/color/background_blue.css">
+    
+    <link rel="stylesheet" href="https://www.lukecraig.com/font-hack-subset.css">
+
+        <link rel="shortcut icon" type="image&#x2F;png" href="/favicon.png">
+    
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-W1PWMESBTD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-W1PWMESBTD');
+</script>
+</head>
+
+<body class="">
+<div class="container">
+    
+    <header class="header">
+        <div class="header__inner">
+            <div class="header__logo">
+                    
+                <a href="https://www.lukecraig.com" style="text-decoration: none;">
+                    <div class="logo">
+                            Luke Craig&#x27;s Blog
+                        </div>
+                </a>
+            </div>
+        </div>
+
+        <nav class="menu">
+            <ul class="menu__inner">
+                
+                <li class="active"><a href="https://www.lukecraig.com">blog</a></li>
+            
+                <li><a href="https://www.lukecraig.com/about">about</a></li>
+            
+                <li><a href="https://www.lukecraig.com/contact">contact</a></li>
+            
+                <li><a href="https://www.lukecraig.com/tags">tags</a></li>
+            
+                <li><a href="https://www.lukecraig.com/archive">archive</a></li>
+            
+                <li><a href="https://github.com/lacraig2" target="_blank" rel="noopener noreferrer">github</a></li>
+            
+                <li><a href="https://scholar.google.com/citations?user=Fooo078AAAAJ&hl=en&oi=ao" target="_blank" rel="noopener noreferrer">google scholar</a></li>
+            
+                <li><a href="https://twitter.com/_lukecraig" target="_blank" rel="noopener noreferrer">twitter</a></li>
+            </ul>
+        </nav>
+    
+    </header>
+    
+
+    <div class="content">
+        
+        <div class="posts">
+                <div class="post on-list">
+                    
+    <h1 class="post-title"><a href="https://www.lukecraig.com/process_list/">PANDA Web server live process graph</a></h1>
+    <div class="post-meta-inline">
+        
+    <span class="post-date">
+            2020-07-21
+        </span>
+
+    </div>
+
+    
+        <span class="post-tags-inline">
+                :: tags:&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/panda/">#PANDA</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/pypanda/">#PyPANDA</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/flask/">#flask</a></span>
+    
+
+                    
+        <div class="post-content">
+            <h2 id="introduction">Introduction</h2>
+<p>In this post I am going to demonstrate the power of PyPANDA by starting up an <code>x86_64</code> virtual machine, tracking its tasks through Operating System Introspection (OSI), and serving that information in a Flask powered web-server that shows processes in <code>graphviz</code> and automatically updates the graph over <code>asyncio</code>. Both the web sever and the virtual machine are run in both the same process and python script.
+<br>
+Take a look at the full source code <a href="https://github.com/lacraig2/panda_webserver_process_graph">here</a>. Grab the docker image <a href="https://hub.docker.com/r/lacraig2/panda_webserver_process_graph">here</a>.</p>
+<h2 id="screen-recording-demo">Screen recording/demo</h2>
+<iframe id="ytplayer" type="text/html" width="640" height="360"
+  src="https://www.youtube.com/embed/hpUeG-7Adh0?autoplay=0&origin=https://blog.lukecraig.com"
+  frameborder="0" allowfullscreen></iframe>
+<h2 id="background">Background</h2>
+<p>I worked on a Python extension to PANDA (pypanda) as my Senior Design Project at Rose-Hulman Institute of Technology. The project has come a long and I am very proud of it, but it would not be where it is today without the work my fantastic colleagues have put into it. For those unfamiliar with PANDA this is the  <a href="https://github.com/panda-re/panda">description on github</a>:</p>
+<blockquote>
+<p>PANDA is an open-source Platform for Architecture-Neutral Dynamic Analysis. It is built upon the QEMU whole system emulator, and so analyses have access to all code executing in the guest and all data.</p>
+</blockquote>
+<p>PyPANDA gives you the capability to register callbacks from PANDA, interact with the serial console, and issue commands to the monitor all from Python.</p>
+<h2 id="pypanda-process-list-capture">PyPANDA process list capture</h2>
+<p>First off we need to set up PANDA from python.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">panda </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">Panda
+
+</span><span style="color:#65737e;"># Panda object sets up virtual machine options
+#-nographic is analagous to -display none (text console)
+</span><span style="color:#c0c5ce;">panda = </span><span style="color:#bf616a;">Panda</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">x86_64</span><span style="color:#c0c5ce;">&quot;, </span><span style="color:#bf616a;">mem</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">1G</span><span style="color:#c0c5ce;">&quot;,</span><span style="color:#bf616a;">expect_prompt</span><span style="color:#c0c5ce;">=</span><span style="color:#b48ead;">rb</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">root@ubuntu:</span><span style="color:#d08770;">.</span><span style="color:#c0c5ce;">*&quot;,
+	</span><span style="color:#bf616a;">qcow</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">bionic-server-cloudimg-amd64-noaslr-nokaslr.qcow2</span><span style="color:#c0c5ce;">&quot;,
+	</span><span style="color:#bf616a;">extra_args</span><span style="color:#c0c5ce;">=[&quot;</span><span style="color:#a3be8c;">-nographic</span><span style="color:#c0c5ce;">&quot;])
+</span><span style="color:#65737e;"># set our OS name for OSI
+</span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">set_os_name</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">linux-64-ubuntu:4.15.0-72-generic-noaslr-nokaslr</span><span style="color:#c0c5ce;">&quot;)
+</span><span style="color:#65737e;"># start running our machine
+</span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">run</span><span style="color:#c0c5ce;">()
+</span></code></pre>
+<p>If you'd like a qcow to start off with you can get the one I am using  <a href="https://panda-re.mit.edu/qcows/linux/ubuntu/1804/x86_64/bionic-server-cloudimg-amd64-noaslr-nokaslr.qcow2">here</a>. We host some qcows at <a href="https://panda-re.mit.edu/qcows/">panda-re.mit.edu/qcows/</a>.</p>
+<p>This is all you <em>need</em> to initialize a virtual machine, but for our analysis we'd like our process list do something so let's start up some processes. Our <code>run_commands</code> function here runs asynchronously with the main thread. It controls both the QEMU monitor and serial console. It first reverts to a snapshot called &quot;root&quot;. Then it starts processes in a loop by typing a command into the serial console, pressing enter, and waiting for and printing the output.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">panda </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">blocking
+
+@</span><span style="color:#bf616a;">blocking
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">run_commands</span><span style="color:#c0c5ce;">():
+	panda.</span><span style="color:#bf616a;">revert_sync</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">root</span><span style="color:#c0c5ce;">&quot;)
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(panda.</span><span style="color:#bf616a;">run_serial_cmd</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">uname -a</span><span style="color:#c0c5ce;">&quot;))
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(panda.</span><span style="color:#bf616a;">run_serial_cmd</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">ls -la</span><span style="color:#c0c5ce;">&quot;))
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(panda.</span><span style="color:#bf616a;">run_serial_cmd</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">whoami</span><span style="color:#c0c5ce;">&quot;))
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(panda.</span><span style="color:#bf616a;">run_serial_cmd</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">date</span><span style="color:#c0c5ce;">&quot;))
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(panda.</span><span style="color:#bf616a;">run_serial_cmd</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">uname -a | tee /asdf</span><span style="color:#c0c5ce;">&quot;))
+
+</span><span style="color:#65737e;"># queue our blocking function
+</span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">queue_async</span><span style="color:#c0c5ce;">(run_commands)
+</span></code></pre>
+<p>Next, we want to find a way to capture our process list. A naive approach would be to use the PANDA  <a href="https://github.com/panda-re/panda/tree/master/panda/plugins/syscalls2">syscalls2</a>  plugin to listen for all <code>sys_execve</code> and <code>sys_exit</code> syscalls. It gets slightly tricky because sys_exit doesn't tell us what program we are. We can map processes by their ASID (Application Specific ID). We can do this by adding the following code to our example above:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#65737e;"># our list of processes
+</span><span style="color:#c0c5ce;">processes = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">()
+cr3_mapping = {}
+</span><span style="color:#65737e;"># called every time our system calls sys_execve
+</span><span style="color:#c0c5ce;">@panda.</span><span style="color:#bf616a;">ppp</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">syscalls2</span><span style="color:#c0c5ce;">&quot;,&quot;</span><span style="color:#a3be8c;">on_sys_execve_enter</span><span style="color:#c0c5ce;">&quot;)
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">on_sys_execve_enter</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">cpu</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">pc</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">pathname</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">argv</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">envp</span><span style="color:#c0c5ce;">): 
+	</span><span style="color:#65737e;"># read the program name from guest memory 
+	</span><span style="color:#c0c5ce;">program_name = panda.</span><span style="color:#bf616a;">read_str</span><span style="color:#c0c5ce;">(cpu, pathname) 
+	</span><span style="color:#65737e;"># add to our process list processes.add(program_name) 
+	# record our cr3 so we know which process to 
+	# delete when sys_exit is called 
+	</span><span style="color:#c0c5ce;">cr3 = cpu.env_ptr.cr[</span><span style="color:#d08770;">3</span><span style="color:#c0c5ce;">] cr3_mapping[cr3] = program_name 
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">f</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">Got new program called </span><span style="color:#c0c5ce;">{program_name}&quot;) 
+
+</span><span style="color:#65737e;"># called when sys_exit is called 
+</span><span style="color:#c0c5ce;">@panda.</span><span style="color:#bf616a;">ppp</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">syscalls2</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">on_sys_exit_enter</span><span style="color:#c0c5ce;">&quot;) 
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">on_sys_exit_enter</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">cpu</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">pc</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">exit_code</span><span style="color:#c0c5ce;">): 
+	</span><span style="color:#65737e;"># fetch our cr3 to identify the process 
+	</span><span style="color:#c0c5ce;">cr3 = cpu.env_ptr.cr[</span><span style="color:#d08770;">3</span><span style="color:#c0c5ce;">] 
+	process = cr3_mapping[cr3] 
+	</span><span style="color:#65737e;"># remove our process from our list 
+	</span><span style="color:#c0c5ce;">processes.</span><span style="color:#bf616a;">remove</span><span style="color:#c0c5ce;">(process) 
+	</span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">f</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">Removed </span><span style="color:#c0c5ce;">{process}</span><span style="color:#a3be8c;"> from process list</span><span style="color:#c0c5ce;">&quot;)
+</span></code></pre>
+<p><a href="https://www.youtube.com/watch?v=kGpsXuMvApo">Would that it were so simple</a>! Checking <code>sys_enter</code> and <code>sys_exit</code> misses many events that we would want reflected in a process list. It misses events such as process forks and process changes names. We could add to our model to add <code>sys_fork</code>, <code>sys_vfork</code>, and <code>sys_prctl</code> (for name changes) and process all of those, but it begins to get tedious. Most importantly, this approach prevents us from starting at a snapshot and knowing what processes have been started.</p>
+<p>To make it easier for us to gather process lists PANDA has Operating System Introspection (OSI) utilities that we can make use of that let us iterate the list of <code>task_struct</code> in the kernel directly. PANDA analysis is done via callbacks. We need to pick a reasonable callback to do regular analysis. We choose <code>asid_changed</code> which gets called when the ASID changes on our underlying system.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#c0c5ce;">processes = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">()
+
+@panda.</span><span style="color:#bf616a;">cb_asid_changed
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">asid_changed</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">env</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">old_asid</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">new_asid</span><span style="color:#c0c5ce;">):
+    </span><span style="color:#b48ead;">global </span><span style="color:#c0c5ce;">processes
+    processes_new = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">()
+    </span><span style="color:#65737e;"># get our processes from OSI
+    </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">process </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">get_processes</span><span style="color:#c0c5ce;">(env):
+        </span><span style="color:#65737e;"># use FFI to read our string from memory
+        </span><span style="color:#c0c5ce;">process_name = ffi.</span><span style="color:#bf616a;">string</span><span style="color:#c0c5ce;">(process.name)
+        </span><span style="color:#65737e;"># add it to our set
+        </span><span style="color:#c0c5ce;">processes_new.</span><span style="color:#bf616a;">add</span><span style="color:#c0c5ce;">(process_name)
+        </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">f</span><span style="color:#c0c5ce;">&quot;{process_name}</span><span style="color:#a3be8c;">_</span><span style="color:#c0c5ce;">{process.pid}&quot;)
+    processes = process_new
+    </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0
+</span></code></pre>
+<p>This is the most basic version of our plugin. It receives a list of processes from the <code>osi</code> plugin, parses it, and replaces the old list. This would work alright if you wanted to print out a process list, but it's not very interesting. It doesn't construct the process tree.</p>
+<p>We first construct a Python class to handle our processes. It largely encapsulates a Tree structure, but also has methods to make things easier on us. In particular, our equality class is a bit different than you might expect. This is because we would like to uniquely identify tasks by the <code>create_time</code> member of the <code>OSIProc</code> struct. This reflects the <a href="https://elixir.bootlin.com/linux/v3.3.5/source/include/linux/sched.h#L1366"><code>start_time</code> field in <code>task_struct</code> in the linux kernel.</a> It is a great method for uniquely identifying tasks. Nearly every other field available does not actually uniquely identify a process. However, our process tree includes kernel tasks, which may have the same <code>start_time</code> field. For this reason we consider the case differently if an object is a child of <code>kthreadd</code>, the kernel task daemon.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Process</span><span style="color:#eff1f5;">(</span><span style="color:#a3be8c;">object</span><span style="color:#eff1f5;">):
+    </span><span style="color:#b48ead;">def </span><span style="color:#96b5b4;">__init__</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">proc_object</span><span style="color:#c0c5ce;">):
+        </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.pid = proc_object.pid
+        </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.ppid = proc_object.ppid
+        </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.start_time = proc_object.create_time
+        </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.name = ffi.</span><span style="color:#bf616a;">string</span><span style="color:#c0c5ce;">(proc_object.name).</span><span style="color:#bf616a;">decode</span><span style="color:#c0c5ce;">()
+        </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.children = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">()
+        </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent = </span><span style="color:#d08770;">None
+    
+    </span><span style="color:#c0c5ce;">@</span><span style="color:#96b5b4;">property
+    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">depth</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">):
+        </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent is </span><span style="color:#bf616a;">self </span><span style="color:#c0c5ce;">or not </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent:
+            </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">1
+        </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">1 </span><span style="color:#c0c5ce;">+ </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent.depth
+    
+    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">add_child</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">other</span><span style="color:#c0c5ce;">):
+	    </span><span style="color:#65737e;"># avoid self loops
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">not other is </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">:
+            </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.children.</span><span style="color:#bf616a;">add</span><span style="color:#c0c5ce;">(other)
+    
+    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">is_kernel_task</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">):
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">kthreadd</span><span style="color:#c0c5ce;">&quot; in </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.name:
+            </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">True
+        </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent and not </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent is </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">:
+            </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.parent.</span><span style="color:#bf616a;">is_kernel_task</span><span style="color:#c0c5ce;">()
+        </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">False
+    
+    </span><span style="color:#b48ead;">def </span><span style="color:#96b5b4;">__eq__</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">other</span><span style="color:#c0c5ce;">):
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">not </span><span style="color:#96b5b4;">isinstance</span><span style="color:#c0c5ce;">(other, Process):
+            </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">False
+        </span><span style="color:#65737e;"># start_times can collide with kernel tasks
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">not </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">is_kernel_task</span><span style="color:#c0c5ce;">():
+            </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.start_time == other.start_time
+        </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.pid == other.pid
+    
+    </span><span style="color:#b48ead;">def </span><span style="color:#96b5b4;">__str__</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">):
+	    </span><span style="color:#65737e;"># replace &quot;:&quot; with &quot;&quot; because graphviz messes &quot;:&quot; up
+        </span><span style="color:#b48ead;">return f</span><span style="color:#c0c5ce;">&quot;{</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.name}</span><span style="color:#a3be8c;">_</span><span style="color:#c0c5ce;">{</span><span style="color:#96b5b4;">hex</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.start_time)[</span><span style="color:#d08770;">2</span><span style="color:#c0c5ce;">:]}&quot;.</span><span style="color:#bf616a;">replace</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">:</span><span style="color:#c0c5ce;">&quot;,&quot;&quot;)
+</span></code></pre>
+<p>Our <code>asid_changed</code> function, which regularly polls on processes must construct the tree map and maintain a list of processes started and exited so we can update old maps. This will be the structure of the asyncio events. Our asyncio events will be specific to each connection made to us and they will receive regular updates from these changes in the Tree.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#c0c5ce;">@panda.</span><span style="color:#bf616a;">cb_asid_changed
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">asid_changed</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">env</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">old_asid</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">new_asid</span><span style="color:#c0c5ce;">):
+    </span><span style="color:#b48ead;">global </span><span style="color:#c0c5ce;">processes
+    </span><span style="color:#65737e;"># get all unique processes
+    </span><span style="color:#c0c5ce;">new_processes = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">() 
+    </span><span style="color:#65737e;"># make a mapping from PID -&gt; process
+    </span><span style="color:#c0c5ce;">pid_mapping = {}
+    </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">process </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">get_processes</span><span style="color:#c0c5ce;">(env):
+        proc_obj = </span><span style="color:#bf616a;">Process</span><span style="color:#c0c5ce;">(process)
+        new_processes.</span><span style="color:#bf616a;">add</span><span style="color:#c0c5ce;">(proc_obj)
+        pid_mapping[proc_obj.pid] = proc_obj
+    
+    </span><span style="color:#65737e;"># iterate over our processes again, from low to high PID,
+    # and add the parent &lt;-&gt; child relation
+    </span><span style="color:#c0c5ce;">processes_to_consider = </span><span style="color:#bf616a;">list</span><span style="color:#c0c5ce;">(new_processes)
+    processes_to_consider.</span><span style="color:#bf616a;">sort</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">key</span><span style="color:#c0c5ce;">=</span><span style="color:#b48ead;">lambda </span><span style="color:#bf616a;">x</span><span style="color:#c0c5ce;">: x.pid)
+    </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">process </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">processes_to_consider:
+        parent = pid_mapping[process.ppid]
+        process.parent = parent
+        parent.</span><span style="color:#bf616a;">add_child</span><span style="color:#c0c5ce;">(process)
+
+    </span><span style="color:#65737e;"># convert back to a set 
+    </span><span style="color:#c0c5ce;">proc_new = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">(processes_to_consider)
+	
+    </span><span style="color:#65737e;"># python lets us do set difference with subtraction
+    # these are the changes in the process
+    </span><span style="color:#c0c5ce;">new_processes = proc_new - processes
+    dead_processes = processes - proc_new
+	
+    </span><span style="color:#65737e;"># set the new process mapping
+    </span><span style="color:#c0c5ce;">processes = proc_new
+    
+    </span><span style="color:#65737e;"># add started processes for each connection
+    </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">nodes </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">nodes_to_add:
+        </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">node </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">new_processes:
+            nodes_to_add[nodes].</span><span style="color:#bf616a;">add</span><span style="color:#c0c5ce;">(node)
+    </span><span style="color:#65737e;"># add exited processes for each connection
+    </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">nodes </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">nodes_to_remove:
+        </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">node </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">dead_processes:
+            nodes_to_remove[nodes].</span><span style="color:#bf616a;">add</span><span style="color:#c0c5ce;">(node)
+    </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0
+</span></code></pre>
+<p>We have constructed a Tree structure of processes and we create a per-connection stream of events for process create and exit. Now we need to construct the webserver. </p>
+<h2 id="flask-webserver-with-asyncio">Flask webserver with asyncio</h2>
+<p>Our webserver is based on Flask with socketio. We spin up flask in its own thread so that we can run pypanda in the main thread. We must start up a flask socketio server with <code>debug=False</code> and <code>use_reloader=False</code>. This is important because <code>Flask</code> wants to be run in the primary thread to use advanced features like reloading and running it a secondary thread like we have it requires we run it with these options off.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">flask </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">Flask, request, render_template
+</span><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">flask_socketio </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">SocketIO
+
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">start_flask</span><span style="color:#c0c5ce;">():
+    socketio.</span><span style="color:#bf616a;">run</span><span style="color:#c0c5ce;">(app,</span><span style="color:#bf616a;">host</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">0.0.0.0</span><span style="color:#c0c5ce;">&#39;,</span><span style="color:#bf616a;">port</span><span style="color:#c0c5ce;">=</span><span style="color:#d08770;">8888</span><span style="color:#c0c5ce;">, 
+			    </span><span style="color:#bf616a;">debug</span><span style="color:#c0c5ce;">=</span><span style="color:#d08770;">False</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">use_reloader</span><span style="color:#c0c5ce;">=</span><span style="color:#d08770;">False</span><span style="color:#c0c5ce;">)
+
+x = threading.</span><span style="color:#bf616a;">Thread</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">target</span><span style="color:#c0c5ce;">=start_flask)
+x.</span><span style="color:#bf616a;">start</span><span style="color:#c0c5ce;">()
+</span></code></pre>
+<p>Next, we define a landing page that will display the process graph to us with JavaScript. Here we use <code>graphviz</code> to create the structure and then output the source it generates into our html directly.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">graphviz </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">Graph
+
+@app.</span><span style="color:#bf616a;">route</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">/</span><span style="color:#c0c5ce;">&quot;)
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">graph</span><span style="color:#c0c5ce;">():
+    g = </span><span style="color:#bf616a;">Graph</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">unix</span><span style="color:#c0c5ce;">&#39;, </span><span style="color:#bf616a;">filename</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">process</span><span style="color:#c0c5ce;">&#39;,</span><span style="color:#bf616a;">engine</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">dot</span><span style="color:#c0c5ce;">&#39;)
+    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">traverse_internal</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">node</span><span style="color:#c0c5ce;">):
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">node is </span><span style="color:#d08770;">None</span><span style="color:#c0c5ce;">:
+            </span><span style="color:#b48ead;">return
+        for </span><span style="color:#c0c5ce;">child </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">node.children:
+            g.</span><span style="color:#bf616a;">edge</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">str</span><span style="color:#c0c5ce;">(node),</span><span style="color:#bf616a;">str</span><span style="color:#c0c5ce;">(child))
+            </span><span style="color:#bf616a;">traverse_internal</span><span style="color:#c0c5ce;">(child)
+    init = </span><span style="color:#bf616a;">get_pid_object</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">)
+    </span><span style="color:#bf616a;">traverse_internal</span><span style="color:#c0c5ce;">(init)
+    </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">render_template</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">svgtest.html</span><span style="color:#c0c5ce;">&#39;, </span><span style="color:#bf616a;">chart_output</span><span style="color:#c0c5ce;">=g.source)
+</span></code></pre>
+<p>Our <code>svgtest.html</code> template that we render is pretty simple. It loads the <code>vis-network</code> javascript plugin and other dependencies. It then loads our page as a <code>DOTstring</code> by using the render syntax <code>{{chart_output|safe}}</code> from the template and renders it into the HTML div with <code>id=&quot;graph&quot;</code>. </p>
+<pre style="background-color:#2b303b;">
+<code class="language-html" data-lang="html"><span style="color:#c0c5ce;"> &lt;</span><span style="color:#bf616a;">head</span><span style="color:#c0c5ce;">&gt;
+&lt;</span><span style="color:#bf616a;">script </span><span style="color:#d08770;">type</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">text/javascript</span><span style="color:#c0c5ce;">&quot; </span><span style="color:#d08770;">src</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">https://unpkg.com/vis-network/standalone/umd/vis-network.min.js</span><span style="color:#c0c5ce;">&quot;&gt;&lt;/</span><span style="color:#bf616a;">script</span><span style="color:#c0c5ce;">&gt;
+&lt;</span><span style="color:#bf616a;">script </span><span style="color:#d08770;">src</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">//code.jquery.com/jquery-3.3.1.min.js</span><span style="color:#c0c5ce;">&quot;&gt;&lt;/</span><span style="color:#bf616a;">script</span><span style="color:#c0c5ce;">&gt;
+&lt;</span><span style="color:#bf616a;">script </span><span style="color:#d08770;">type</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">text/javascript</span><span style="color:#c0c5ce;">&quot; </span><span style="color:#d08770;">src</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.6/socket.io.min.js</span><span style="color:#c0c5ce;">&quot;&gt;&lt;/</span><span style="color:#bf616a;">script</span><span style="color:#c0c5ce;">&gt;
+&lt;</span><span style="color:#bf616a;">link </span><span style="color:#d08770;">rel</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">stylesheet</span><span style="color:#c0c5ce;">&quot; </span><span style="color:#d08770;">href</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css</span><span style="color:#c0c5ce;">&quot;&gt;
+&lt;/</span><span style="color:#bf616a;">head</span><span style="color:#c0c5ce;">&gt;
+&lt;</span><span style="color:#bf616a;">div </span><span style="color:#8fa1b3;">id</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">graph</span><span style="color:#c0c5ce;">&quot;&gt;&lt;/</span><span style="color:#bf616a;">div</span><span style="color:#c0c5ce;">&gt;
+&lt;</span><span style="color:#bf616a;">script </span><span style="color:#d08770;">type</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">text/javascript</span><span style="color:#c0c5ce;">&quot; </span><span style="color:#d08770;">charset</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">utf-8</span><span style="color:#c0c5ce;">&quot;&gt;
+</span><span style="color:#bf616a;">$</span><span style="color:#c0c5ce;">(document).</span><span style="color:#bf616a;">ready</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">function</span><span style="color:#c0c5ce;">(){
+  </span><span style="color:#65737e;">// provide data in the DOT language
+  </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">DOTstring </span><span style="color:#c0c5ce;">= `</span><span style="color:#a3be8c;">{{chart_output|safe}}</span><span style="color:#c0c5ce;">`;
+  </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">parsedData </span><span style="color:#c0c5ce;">= </span><span style="color:#bf616a;">vis</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">parseDOTNetwork</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">DOTstring</span><span style="color:#c0c5ce;">);
+
+  </span><span style="color:#bf616a;">nodes </span><span style="color:#c0c5ce;">= new </span><span style="color:#bf616a;">vis</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">DataSet</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">parsedData</span><span style="color:#c0c5ce;">.nodes);
+  </span><span style="color:#bf616a;">edges </span><span style="color:#c0c5ce;">= new </span><span style="color:#bf616a;">vis</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">DataSet</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">parsedData</span><span style="color:#c0c5ce;">.edges);
+  
+  </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">data </span><span style="color:#c0c5ce;">= {nodes: </span><span style="color:#bf616a;">nodes</span><span style="color:#c0c5ce;">,edges: </span><span style="color:#bf616a;">edges</span><span style="color:#c0c5ce;">};
+  
+  </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">container </span><span style="color:#c0c5ce;">= document.</span><span style="color:#bf616a;">getElementById</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">graph</span><span style="color:#c0c5ce;">&#39;);
+  </span><span style="color:#bf616a;">options </span><span style="color:#c0c5ce;">= {layout:{improvedLayout:</span><span style="color:#d08770;">false</span><span style="color:#c0c5ce;">}};
+  
+  </span><span style="color:#65737e;">// create a network
+  </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">network </span><span style="color:#c0c5ce;">= new </span><span style="color:#bf616a;">vis</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">Network</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">container</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">data</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">options</span><span style="color:#c0c5ce;">);
+});
+&lt;/</span><span style="color:#bf616a;">script</span><span style="color:#c0c5ce;">&gt;
+</span></code></pre>
+<p>This is a nice static page, but we can make it dynamic by adding <code>asyncio</code> events. First, we need to implement the <code>connect</code> and <code>disconnect</code> events which are automatically generated by the <code>asyncio</code> library.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#c0c5ce;">thread = </span><span style="color:#bf616a;">Thread</span><span style="color:#c0c5ce;">()
+thread_stop_event = </span><span style="color:#bf616a;">Event</span><span style="color:#c0c5ce;">()
+@socketio.</span><span style="color:#bf616a;">on</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">connect</span><span style="color:#c0c5ce;">&#39;, </span><span style="color:#bf616a;">namespace</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">/test</span><span style="color:#c0c5ce;">&#39;)
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">test_connect</span><span style="color:#c0c5ce;">():
+    </span><span style="color:#65737e;"># need visibility of the global thread object
+    </span><span style="color:#b48ead;">global </span><span style="color:#c0c5ce;">thread
+    </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">Client connected</span><span style="color:#c0c5ce;">&#39;)
+    </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">not thread.</span><span style="color:#bf616a;">isAlive</span><span style="color:#c0c5ce;">():
+        </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Starting Thread</span><span style="color:#c0c5ce;">&quot;)
+        thread = socketio.</span><span style="color:#bf616a;">start_background_task</span><span style="color:#c0c5ce;">(emitEvents)
+
+@socketio.</span><span style="color:#bf616a;">on</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">disconnect</span><span style="color:#c0c5ce;">&#39;, </span><span style="color:#bf616a;">namespace</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">/test</span><span style="color:#c0c5ce;">&#39;)
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">test_disconnect</span><span style="color:#c0c5ce;">():
+    </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">Client disconnected</span><span style="color:#c0c5ce;">&#39;)
+</span></code></pre>
+<p>We want to provide regular updates on the virtual machine to the web browser. To handle the updates we start up a background task thread whenever we receive a connection which take the event stream our process list generates and sends it along to the website. This thread is distinguished by a unique random string we generate on each run. We send along updates in a loop and remove processes if they appear in both the <code>to_add</code> and <code>to_remove</code> queue. We sort our <code>to_add</code>  and <code>to_remove</code> queues by depth. For <code>to_add</code> we prioritize the minimum depth. For <code>to_remove</code> we prioritize the maximum depth. Doing so avoids situations where a child process has no apparent connected parent process in the graph.</p>
+<p>Our <code>socketio</code> library emits an event called <code>newprocess</code> which has members <code>child</code> (for the child process) and <code>pproc</code> for the parent process as well as whether it should  be added or removed from the list.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">flask_socketio </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">emit
+</span><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">string </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">ascii_lowercase
+</span><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">random </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">choice
+
+thread = </span><span style="color:#bf616a;">Thread</span><span style="color:#c0c5ce;">()
+thread_stop_event = </span><span style="color:#bf616a;">Event</span><span style="color:#c0c5ce;">()
+
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">get_random_string</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">length</span><span style="color:#c0c5ce;">):
+    letters = string.ascii_lowercase
+    </span><span style="color:#b48ead;">return </span><span style="color:#c0c5ce;">&#39;&#39;.</span><span style="color:#bf616a;">join</span><span style="color:#c0c5ce;">(random.</span><span style="color:#bf616a;">choice</span><span style="color:#c0c5ce;">(letters) </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">i </span><span style="color:#b48ead;">in </span><span style="color:#96b5b4;">range</span><span style="color:#c0c5ce;">(length))
+
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">emitEvents</span><span style="color:#c0c5ce;">():
+    </span><span style="color:#b48ead;">global </span><span style="color:#c0c5ce;">nodes_to_add
+    my_string = </span><span style="color:#bf616a;">get_random_string</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">8</span><span style="color:#c0c5ce;">)
+    nodes_to_add[my_string] = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">()
+    nodes_to_remove[my_string] = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">()
+    my_nodes_to_add = nodes_to_add[my_string]
+    my_nodes_to_remove = nodes_to_remove[my_string]
+    
+    </span><span style="color:#b48ead;">while </span><span style="color:#c0c5ce;">not thread_stop_event.</span><span style="color:#bf616a;">isSet</span><span style="color:#c0c5ce;">():
+	    </span><span style="color:#65737e;"># find our intersection of events. remove them
+	    </span><span style="color:#c0c5ce;">snta = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">(my_nodes_to_add)
+	    sntr = </span><span style="color:#bf616a;">set</span><span style="color:#c0c5ce;">(my_nodes_to_remove)
+        common = snta.</span><span style="color:#bf616a;">intersection</span><span style="color:#c0c5ce;">(sntr)
+        </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">i </span><span style="color:#b48ead;">in </span><span style="color:#bf616a;">list</span><span style="color:#c0c5ce;">(common):
+            my_nodes_to_add.</span><span style="color:#bf616a;">remove</span><span style="color:#c0c5ce;">(i)
+            my_nodes_to_remove.</span><span style="color:#bf616a;">remove</span><span style="color:#c0c5ce;">(i)
+        </span><span style="color:#65737e;"># sort nodes to add by depth
+        </span><span style="color:#c0c5ce;">nodes_to_add_sorted = </span><span style="color:#bf616a;">list</span><span style="color:#c0c5ce;">(my_nodes_to_add)
+        </span><span style="color:#96b5b4;">sorted</span><span style="color:#c0c5ce;">(nodes_to_add_sorted, </span><span style="color:#bf616a;">key</span><span style="color:#c0c5ce;">=</span><span style="color:#b48ead;">lambda </span><span style="color:#bf616a;">x</span><span style="color:#c0c5ce;">: x.depth)
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">my_nodes_to_add:
+            p = nodes_to_add_sorted[</span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">]
+            my_nodes_to_add.</span><span style="color:#bf616a;">remove</span><span style="color:#c0c5ce;">(p)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">f</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">emitting newprocess </span><span style="color:#c0c5ce;">{p}&quot;)
+            parent = p.parent
+            socketio.</span><span style="color:#bf616a;">emit</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">newprocess</span><span style="color:#c0c5ce;">&#39;, 
+                {&#39;</span><span style="color:#a3be8c;">operation</span><span style="color:#c0c5ce;">&#39;: &#39;</span><span style="color:#a3be8c;">add</span><span style="color:#c0c5ce;">&#39;,
+                &#39;</span><span style="color:#a3be8c;">pproc</span><span style="color:#c0c5ce;">&#39;: </span><span style="color:#bf616a;">str</span><span style="color:#c0c5ce;">(parent), 
+                &#39;</span><span style="color:#a3be8c;">child</span><span style="color:#c0c5ce;">&#39;: </span><span style="color:#bf616a;">str</span><span style="color:#c0c5ce;">(p)},
+                </span><span style="color:#bf616a;">namespace</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">/test</span><span style="color:#c0c5ce;">&#39;)
+        nodes_to_remove_sorted = </span><span style="color:#bf616a;">list</span><span style="color:#c0c5ce;">(my_nodes_to_remove)
+        </span><span style="color:#96b5b4;">sorted</span><span style="color:#c0c5ce;">(nodes_to_remove_sorted, </span><span style="color:#bf616a;">key</span><span style="color:#c0c5ce;">=</span><span style="color:#b48ead;">lambda </span><span style="color:#bf616a;">x</span><span style="color:#c0c5ce;">: -x.depth)
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">my_nodes_to_remove:
+            p = nodes_to_remove_sorted[</span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">]
+            my_nodes_to_remove.</span><span style="color:#bf616a;">remove</span><span style="color:#c0c5ce;">(p)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">f</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">emitting remove </span><span style="color:#c0c5ce;">{p}&quot;)
+            parent = p.parent
+            socketio.</span><span style="color:#bf616a;">emit</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">newprocess</span><span style="color:#c0c5ce;">&#39;, 
+                {&#39;</span><span style="color:#a3be8c;">operation</span><span style="color:#c0c5ce;">&#39;: &#39;</span><span style="color:#a3be8c;">remove</span><span style="color:#c0c5ce;">&#39;,
+                &#39;</span><span style="color:#a3be8c;">pproc</span><span style="color:#c0c5ce;">&#39;: </span><span style="color:#bf616a;">str</span><span style="color:#c0c5ce;">(parent),
+                &#39;</span><span style="color:#a3be8c;">child</span><span style="color:#c0c5ce;">&#39;: </span><span style="color:#bf616a;">str</span><span style="color:#c0c5ce;">(p)},
+                </span><span style="color:#bf616a;">namespace</span><span style="color:#c0c5ce;">=&#39;</span><span style="color:#a3be8c;">/test</span><span style="color:#c0c5ce;">&#39;)
+        socketio.</span><span style="color:#bf616a;">sleep</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">0.1</span><span style="color:#c0c5ce;">)
+</span></code></pre>
+<p>Lastly, we need JavaScript code to add and remove nodes, which we insert into our <code>&lt;script&gt;</code> tags from above. Our code interacts with the <code>nodes</code> and <code>edges</code> variables from above to attempt to remove or add nodes and edges from above. </p>
+<pre style="background-color:#2b303b;">
+<code class="language-js" data-lang="js"><span style="color:#b48ead;">var </span><span style="color:#bf616a;">socket </span><span style="color:#c0c5ce;">= </span><span style="color:#bf616a;">io</span><span style="color:#c0c5ce;">.</span><span style="color:#8fa1b3;">connect</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">http://</span><span style="color:#c0c5ce;">&#39; + document.</span><span style="color:#bf616a;">domain
+				</span><span style="color:#c0c5ce;">+ &#39;</span><span style="color:#a3be8c;">:</span><span style="color:#c0c5ce;">&#39; + </span><span style="color:#bf616a;">location</span><span style="color:#c0c5ce;">.port + &#39;</span><span style="color:#a3be8c;">/test</span><span style="color:#c0c5ce;">&#39;);
+</span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">numbers_received </span><span style="color:#c0c5ce;">= [];
+    
+</span><span style="color:#65737e;">//receive details from server
+</span><span style="color:#bf616a;">socket</span><span style="color:#c0c5ce;">.</span><span style="color:#8fa1b3;">on</span><span style="color:#c0c5ce;">(&#39;</span><span style="color:#a3be8c;">newprocess</span><span style="color:#c0c5ce;">&#39;, </span><span style="color:#b48ead;">function</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">) {
+</span><span style="color:#ebcb8b;">console</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">log</span><span style="color:#c0c5ce;">( </span><span style="color:#bf616a;">msg </span><span style="color:#c0c5ce;">);
+</span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(typeof </span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">pproc </span><span style="color:#c0c5ce;">!== &#39;</span><span style="color:#a3be8c;">undefined</span><span style="color:#c0c5ce;">&#39; &amp;&amp;
+		 typeof </span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">child </span><span style="color:#c0c5ce;">!== &#39;</span><span style="color:#a3be8c;">undefined</span><span style="color:#c0c5ce;">&#39;){
+	</span><span style="color:#bf616a;">pproc </span><span style="color:#c0c5ce;">= </span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">pproc</span><span style="color:#c0c5ce;">;
+	</span><span style="color:#bf616a;">child </span><span style="color:#c0c5ce;">= </span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">;
+	</span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">operation </span><span style="color:#c0c5ce;">== &quot;</span><span style="color:#a3be8c;">add</span><span style="color:#c0c5ce;">&quot;){
+		</span><span style="color:#ebcb8b;">console</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">log</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Adding pair of type </span><span style="color:#c0c5ce;">&quot;+
+			 </span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">pproc </span><span style="color:#c0c5ce;">+&quot; &quot; +</span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">);
+		</span><span style="color:#b48ead;">try</span><span style="color:#c0c5ce;">{
+			</span><span style="color:#bf616a;">nodes</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">add</span><span style="color:#c0c5ce;">({id:</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">,label:</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">});
+			</span><span style="color:#bf616a;">edges</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">add</span><span style="color:#c0c5ce;">({to:</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">, from:</span><span style="color:#bf616a;">pproc</span><span style="color:#c0c5ce;">});
+		}</span><span style="color:#b48ead;">catch </span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">err</span><span style="color:#c0c5ce;">){
+			</span><span style="color:#ebcb8b;">console</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">log</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">fail add</span><span style="color:#c0c5ce;">&quot;);
+		}
+	}</span><span style="color:#b48ead;">else</span><span style="color:#c0c5ce;">{
+		</span><span style="color:#ebcb8b;">console</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">log</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Removing pair of type </span><span style="color:#c0c5ce;">&quot;+
+			</span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">pproc </span><span style="color:#c0c5ce;">+&quot; &quot; +</span><span style="color:#bf616a;">msg</span><span style="color:#c0c5ce;">.</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">);
+		</span><span style="color:#b48ead;">try</span><span style="color:#c0c5ce;">{
+			</span><span style="color:#bf616a;">nodes</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">remove</span><span style="color:#c0c5ce;">({id:</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">,label:</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">});
+			</span><span style="color:#bf616a;">edges</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">remove</span><span style="color:#c0c5ce;">({to:</span><span style="color:#bf616a;">child</span><span style="color:#c0c5ce;">, from:</span><span style="color:#bf616a;">pproc</span><span style="color:#c0c5ce;">});
+		} </span><span style="color:#b48ead;">catch </span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">err</span><span style="color:#c0c5ce;">){
+			</span><span style="color:#ebcb8b;">console</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">log</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">fail remove</span><span style="color:#c0c5ce;">&quot;);
+		}
+	}
+}</span><span style="color:#b48ead;">else</span><span style="color:#c0c5ce;">{
+	</span><span style="color:#ebcb8b;">console</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">log</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">pproc or child is undefined</span><span style="color:#c0c5ce;">&quot;);
+}
+</span></code></pre><h2 id="conclusions">Conclusions</h2>
+<p>The Python extension for PANDA is a powerful extension that allows for really interesting and fun analysis. In our example here we had a Web server with <code>asyncio</code> functionality and a script driving a virtual machine all in a single python script. I am really excited to see what else can be produced with this!</p>
+<p>Take a look at the source code <a href="https://github.com/lacraig2/panda_webserver_process_graph">here</a>. Grab the docker image <a href="https://hub.docker.com/r/lacraig2/panda_webserver_process_graph">here</a>.</p>
+
+        </div>
+
+                </div>
+            <div class="pagination">
+                <div class="pagination__buttons">
+                    <span class="button previous">
+                        <a href="https://www.lukecraig.com/page/2/">
+                            <span class="button__icon">←</span>&nbsp;
+                            <span class="button__text">Newer posts</span>
+                        </a>
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    
+    <footer class="footer">
+        <div class="footer__inner">
+                <div class="copyright copyright--user"></div></div><div class="copyright">© 2021 Luke Craig</div></div>
+            </div>
+    </footer>
+    
+
+</div>
+</body>
+
+</html>

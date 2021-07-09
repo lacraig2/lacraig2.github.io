@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Making the basic buffer overflow demo more approachable</title>
+    
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <meta name="robots" content="noodp"/>
+
+    <link rel="stylesheet" href="https://www.lukecraig.com/style.css">
+    <link rel="stylesheet" href="https://www.lukecraig.com/color/red.css">
+
+        <link rel="stylesheet" href="https://www.lukecraig.com/color/background_blue.css">
+    
+    <link rel="stylesheet" href="https://www.lukecraig.com/font-hack-subset.css">
+
+        <link rel="shortcut icon" type="image&#x2F;png" href="/favicon.png">
+    
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-W1PWMESBTD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-W1PWMESBTD');
+</script>
+</head>
+
+<body class="">
+<div class="container">
+    
+    <header class="header">
+        <div class="header__inner">
+            <div class="header__logo">
+                    
+                <a href="https://www.lukecraig.com" style="text-decoration: none;">
+                    <div class="logo">
+                            Luke Craig&#x27;s Blog
+                        </div>
+                </a>
+            </div>
+        </div>
+
+        <nav class="menu">
+            <ul class="menu__inner">
+                
+                <li class="active"><a href="https://www.lukecraig.com">blog</a></li>
+            
+                <li><a href="https://www.lukecraig.com/about">about</a></li>
+            
+                <li><a href="https://www.lukecraig.com/contact">contact</a></li>
+            
+                <li><a href="https://www.lukecraig.com/tags">tags</a></li>
+            
+                <li><a href="https://www.lukecraig.com/archive">archive</a></li>
+            
+                <li><a href="https://github.com/lacraig2" target="_blank" rel="noopener noreferrer">github</a></li>
+            
+                <li><a href="https://scholar.google.com/citations?user=Fooo078AAAAJ&hl=en&oi=ao" target="_blank" rel="noopener noreferrer">google scholar</a></li>
+            
+                <li><a href="https://twitter.com/_lukecraig" target="_blank" rel="noopener noreferrer">twitter</a></li>
+            </ul>
+        </nav>
+    
+    </header>
+    
+
+    <div class="content">
+        
+    <div class="post">
+        
+    <h1 class="post-title"><a href="https://www.lukecraig.com/improving_bbo/">Making the basic buffer overflow demo more approachable</a></h1>
+    <div class="post-meta-inline">
+        
+    <span class="post-date">
+            2021-05-05
+        </span>
+
+    </div>
+
+    
+        <span class="post-tags-inline">
+                :: tags:&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/buffer-overflow/">#buffer overflow</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/exploitation/">#exploitation</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/demo/">#demo</a></span>
+    
+
+        
+        <div class="post-content">
+            <h2 id="tldr">TLDR</h2>
+<p>I wrote up a basic buffer overflow to program redirection demo which attempts to improve upon the standard buffer overflow demo in the following ways:</p>
+<ul>
+<li>Makes the target address a printable string (in this case <code>&quot;HACK&quot;</code>).</li>
+<li>Provides feedback on faults so that the students are capable of being successful with the assignment without a debugger.</li>
+</ul>
+<p>The demo supports <code>x86</code>, <code>x86_64</code>, and <code>ARM</code> targets.</p>
+<p>See it in action:</p>
+<script id="asciicast-7ABvNwcKARPqRxkvpC8c9m8sq" src="https://asciinema.org/a/7ABvNwcKARPqRxkvpC8c9m8sq.js" async></script>
+<p>You can find the code <a href="https://github.com/lacraig2/JHU_Comp_Arch_Hacking_Book_Project">here</a>.</p>
+<h2 id="introduction">Introduction</h2>
+<p>I took a Computer Architecture course at Johns Hopkins toward my M.S. in Computer Science this term. The course had an optional final project. This blog post is adapted from that project.</p>
+<p>My Professor, <a href="https://ep.jhu.edu/faculty/charles-kann/">Dr. Kann</a>, had a list of recommended projects. On the list was a project to rewrite their buffer overflow example for undergraduates. They had a stack buffer overflow example based in the <a href="http://courses.missouristate.edu/kenvollmar/mars/">MARS Simulator</a>. He wanted an updated example which ran as a binary on ARM so that the students could use their Raspberry Pis which was also mindful of the fact that the some of the students might not be familiar with debuggers.</p>
+<h2 id="motivation">Motivation</h2>
+<p>The following is a perfectly valid buffer overflow demonstration. The function <code>strcpy</code> is unbounded while the buffer is bounded so we can overflow variables on the stack including the return address saed there. On a modern system it will need a flag to disable stack canaries (<code>-fno-stack-protector</code>), but otherwise this works fine.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-C" data-lang="C"><span style="color:#b48ead;">int </span><span style="color:#8fa1b3;">main</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">int </span><span style="color:#bf616a;">argc</span><span style="color:#c0c5ce;">, </span><span style="color:#b48ead;">char</span><span style="color:#c0c5ce;">* </span><span style="color:#bf616a;">argv</span><span style="color:#c0c5ce;">[]){
+    </span><span style="color:#b48ead;">char</span><span style="color:#c0c5ce;"> buf[</span><span style="color:#d08770;">16</span><span style="color:#c0c5ce;">];
+    </span><span style="color:#96b5b4;">strcpy</span><span style="color:#c0c5ce;">(buf, argv[</span><span style="color:#d08770;">1</span><span style="color:#c0c5ce;">]);
+    </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">;
+}
+</span></code></pre>
+<p>If we wanted to continue with this demo we might write a target function, expect the students to find the address, and then also expect students to know how to pipe the associated characters from the address into an argument field like this:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-bash" data-lang="bash"><span style="color:#bf616a;">./bin </span><span style="color:#c0c5ce;">`</span><span style="color:#bf616a;">python -c </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">print(&#39;a&#39;*20 + &#39;\x01\x02\x03\x04&#39;[::-1])</span><span style="color:#c0c5ce;">&quot;`
+</span></code></pre>
+<p>That's a lot of information to expect someone just starting to know. Next up let's see what happens if they run the binary with a string long enough to overflow the return address on the stack.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-bash" data-lang="bash"><span style="color:#bf616a;">$</span><span style="color:#c0c5ce;"> ./bin AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+</span><span style="color:#bf616a;">Segmentation</span><span style="color:#c0c5ce;"> fault (core dumped)
+</span></code></pre>
+<p>So informative! Students may realize they did the wrong thing, but gain no information with these crash messages. Of course, students <em>could</em> use a debugger on the run or on the core file, but that's more than we should expect of a student seeing a buffer overflow for the first time.</p>
+<p>In the following sections we address both of these problems.</p>
+<h2 id="making-the-winning-string-typeable">Making the winning string typeable</h2>
+<p>If we leave it to the compiler an address of a function we may want to hit could be something like 0x08048911. Take a look at each series of bytes: 0x08, 0x04, 0x89, and 0x11 and find the corresponding key on your keyboard. I will assist you with an ASCII chart below. You'll find that none of these will appear on your keyboard: that is, they are not typeable. Most addresses will not be fully typeable. So we've defined our problem: we want an address at a <em>fixed address</em> and whose bytes are all <em>typeable</em>.</p>
+<center><img src="https://upload.wikimedia.org/wikipedia/commons/c/cf/USASCII_code_chart.png" width="500"></center>
+<p>Let's start with putting a function at a fixed address. When I first came across this problem I thought it would be easy. The internet was littered with potential options:</p>
+<ul>
+<li>
+<p><code>mmap</code> a memory region <code>RWX</code>, <code>memcpy</code> a function, and then call a function pointer at that address: <a href="https://stackoverflow.com/questions/19701424/how-to-place-a-function-at-a-particular-address-in-c">link</a></p>
+<ul>
+<li>I discounted this option because I wanted the functionality in the binary itself to be clear and also for the address of the function to both be available in the symbols output and for that output at that address to be analyze-able in a disassembler.</li>
+</ul>
+</li>
+<li>
+<p>Various options related to <code>__attribute__((at(address)))</code>: <a href="https://www.keil.com/support/man/docs/armlink/armlink_Chunk1880490665.htm">link</a></p>
+<ul>
+<li>I didn't pursue this option because it seems to only be supported in specific embedded compilers and I wanted our system to be able to be built on a generally available compilers.</li>
+</ul>
+</li>
+<li>
+<p><code>objcopy</code> the data into the program: <a href="https://www.devever.net/%7Ehl/incbin">link</a></p>
+<ul>
+<li><code>objcopy</code> is the traditional way to get binary data into a C program. It works pretty well and if I had thought about it before this next option I might have used it instead. In the end it's less fun than our actual solution so I'm not too worried about it.</li>
+</ul>
+</li>
+<li>
+<p>Writing a custom linker script: <a href="https://interrupt.memfault.com/blog/how-to-write-linker-scripts-for-firmware">link</a></p>
+<ul>
+<li>This was very close to what I needed, but unfortunately there is very little documentation on non-embedded customization of linker scripts. It's really not a common use case.</li>
+</ul>
+</li>
+</ul>
+<p>I decided to move forward with a custom linker script. I put some time into attempting to write something custom using the documentation I found online for embedded systems and the linker script <a href="https://sourceware.org/binutils/docs/ld/Scripts.html">docs</a> themselves, but the issue is that the embedded systems writing custom linker scripts are far more simple than the actual requirements for a semi-functioning linux binary. There always seemed to be an issue some section or issue I forgot.</p>
+<p>It was around that time that I realized that my machine must be using some default linker script that I could just modify somehow. So I started attempting to locate my linker script. I searched high and low for <code>.ld</code> scripts on my machine: &quot;surely it must be somewhere!&quot;</p>
+<p>Eventually I gave up and googled it and I found out a couple things: first, people are a bit <a href="https://stackoverflow.com/questions/28688484/actual-default-linker-script-and-settings-gcc-uses">frustrated</a> by the lack of linker documentation and that the binary <code>ld</code>, the linker itself, would produce for me its linker script if I asked nicely.</p>
+<p>If you run <code>ld --verbose</code> (and add <code>-m</code> to specify machine type) it will produce something like:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">GNU ld (GNU Binutils for Ubuntu) 2.30
+  Supported emulations:
+   elf_x86_64
+   ...
+   using internal linker script:
+==================================================
+/* Script for -z combreloc: combine and sort reloc sections */
+/* Copyright (C) 2014-2018 Free Software Foundation, Inc.
+   Copying and distribution of this script, with or without modification,
+   are permitted in any medium without royalty provided the copyright
+   notice and this notice are preserved.  */
+OUTPUT_FORMAT(&quot;elf32-i386&quot;, &quot;elf32-i386&quot;,
+              &quot;elf32-i386&quot;)
+OUTPUT_ARCH(i386)
+ENTRY(_start)
+</span></code></pre>
+<p>If we <code>tee</code> this to a file and edit it a bit we can see what our system is actually doing under the hood. We see things like <code>ENTRY(_start)</code>, which is the declaration that the <code>_start</code> symbol is the actual entry point for our binary. We can see the definition of the text segment relative to the program start and other sections.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">PROVIDE (__executable_start = SEGMENT_START(&quot;text-segment&quot;, 0x08048000)); 
+. = SEGMENT_START(&quot;text-segment&quot;, 0x08048000) + SIZEOF_HEADERS;
+.interp         : { *(.interp) }
+.note.gnu.build-id : { *(.note.gnu.build-id) }
+.hash           : { *(.hash) }
+.gnu.hash       : { *(.gnu.hash) }
+</span></code></pre>
+<p>For those of you who have not had the displeasure of looking through linker scripts I'll provide a <em>very</em> basic primer. There are <a href="https://sourceware.org/binutils/docs/ld/Simple-Commands.html">commands</a> such as SECTIONS, MEMORY, PHDRS, and VERSION which define, as you might guess, the sections and memory and whatnot. We'll only be dealing with the SECTIONS command today. There is also the concept of the '.' variable. This is the <a href="https://sourceware.org/binutils/docs/ld/Simple-Assignments.html">location counter</a>: it's value is updated as assignments are made as the linker traverses the command from the top to the bottom.</p>
+<p>We would like to put code at a custom address so we need a new section containing just our code. Adding to our linker script is a little bit more difficult that we might expect. We do not want to put our custom values at the beginning because we don't want to disrupt the rest of the binary. We also do not want it at very end of the SECTION command because that is where debug information that is not loaded is placed.</p>
+<p>So we place our <a href="https://github.com/lacraig2/JHU_Comp_Arch_Hacking_Book_Project/blob/main/ld/modified_i386_linker_script.ld#L173">section declaration</a> right before the <code>_end</code> symbol, set the location tracker to a custom value, and then use the linker syntax to define a custom section.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">  . = 0x4b434148;
+  .win_sec          : { *(.win_sec) }
+  _end = .; PROVIDE (end = .);
+  . = DATA_SEGMENT_END (.);
+</span></code></pre>
+<p>This works well enough. It creates a section, but our winning code is not yet pointing to that section. We need to point our assembly to our new section. In ARM we <a href="https://github.com/lacraig2/JHU_Comp_Arch_Hacking_Book_Project/blob/main/src/arch/bet_you_cant_arm.S">add</a>:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">.section .win_sec, &quot;ax&quot;
+</span></code></pre>
+<p>Next, we just had to pick a custom string that fit some criteria. In particular, the string is an address so the last byte needs to line up with instructions. On little endian systems the string is read into a word and flipped so it's actually the first character of the custom string that needs to align to boundaries. To support 64-bit machines I made sure that this first character was divisible by 8.</p>
+<p>ASCII characters divisible by 8 are pretty limited. There are 3: 'H', 'P', and 'X'. Of course, we jumped on 'H' and chose our string to be <code>HACK</code>. A valid solution to our exercise is:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">$ ./demo_amd64 aaaaaaaaaaaaaaaaaaaaaaaaHACK
+Hello to the string consumer 3000!
+You provided me a string! Yum!
+  _____
+ /     \
+| () () |
+ \  ^  /
+  |||||
+  |||||
+
+Oh no! There&#39;s haxx0rs in the mainframe!
+</span></code></pre><h2 id="making-the-system-give-meaningful-feedback">Making the system give meaningful feedback</h2>
+<p>I wanted the students to be able to be successful with this exercise without the use of a debugger. That meant making sure each time they hit a signal stopping the program it gave back meaningful feedback.</p>
+<p>Initially I just programmed up a basic signal handler, but eventually decided that I wanted additional information about the crash. The <code>struct sigaction</code> takes a flag option called <code>SA_SIGINFO</code> which provides two additional options that provide a lot of great information about the crash:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-C" data-lang="C"><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">fault_handler</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">int </span><span style="color:#bf616a;">signo</span><span style="color:#c0c5ce;">, siginfo_t *</span><span style="color:#bf616a;">info</span><span style="color:#c0c5ce;">, </span><span style="color:#b48ead;">void </span><span style="color:#c0c5ce;">*</span><span style="color:#bf616a;">ucontext</span><span style="color:#c0c5ce;">);
+</span></code></pre>
+<p>However, every once in a while a crash would come along where the <code>siginfo_t</code> and the <code>ucontext</code> pointers were invalid. I looked through the <a href="https://man7.org/linux/man-pages/man2/sigaction.2.html">sigaction documentation</a> thinking I had missed a configuration option until I came across <code>SA_ONSTACK</code>:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">Call the signal handler on an alternate signal stack
+provided by sigaltstack(2).  If an alternate stack is not
+available, the default stack will be used.  This flag is
+meaningful only when establishing a signal handler.
+</span></code></pre>
+<p>The only conclusion I could come to was that when I was smashing the stack the signal handler somehow could not recover it. I followed the example <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/sigaltstack.html">here</a> which uses <code>malloc</code> to define a new stack <code>signaltstack</code> to define an alternate stack. After that the handler worked perfectly.</p>
+<p>As for the logic internal to the handler we wanted to give some sense of the error and provide additional logic provided to us in the system (usually in the form of the <code>si_code</code> field). In particular, we separated out <code>SIGSEGV</code> codes to make them clearer and provided the address of the crash so that student can use that as information to make informed guesses. Additionally, we print the register state for each architecture we support.</p>
+<p>An error state on ARM looks like:</p>
+<pre style="background-color:#2b303b;">
+<code class="language-text" data-lang="text"><span style="color:#c0c5ce;">------------------------FAULT-------------------------
+
+Goodbye cruel world! I was a young program. And I have died too soon!
+
+You can avenge my death! I received a fault.
+That means something went wrong. I received a &quot;Segmentation fault&quot;.
+If you haven&#39;t seen that term before google it! The Wikipedia article is pretty good.
+
+Signal Information:
+Seems like the faulty address was 0x4140.
+Looks like that address isn&#39;t mapped.
+
+Register state:
+R0           0xfffef0c0
+R1           0xfffef3a3
+R2           0x0
+R3           0x73752f3d
+R4           0xfffef0f8
+R5           0x0
+R6           0x0
+R7           0x41414141
+R8           0x0
+R9           0x0
+R10          0xff7ee000
+FP           0x0
+SP           0xfffef0d8
+LR           0x109ed
+PC           0x4140
+
+Keep in mind we want our address to be 0x4b434148
+</span></code></pre>
+<p>A student playing around with this will see that they have modified the Program Counter and with some help they may be able to figure out the padding size and address string should be.</p>
+<h2 id="conclusions">Conclusions</h2>
+<p>I built a code redirection buffer overflow demo that should be an easier initial target for students; especially those students who are not familiar with debuggers. This blog post was written with the intention that the link be listed in the book such that anyone interested in a deeper explanation of the problem would be able to find it here.</p>
+
+        </div>
+
+        
+        <div class="pagination">
+            <div class="pagination__title">
+                <span class="pagination__title-h">Thanks for reading! Read other posts?</span>
+                <hr />
+            </div>
+            <div class="pagination__buttons">
+                    <span class="button previous">
+                        <a href="https://www.lukecraig.com/pypanda_heap_inspect/">
+                            <span class="button__icon">←</span>&nbsp;
+                            <span class="button__text">Easy Hypervisor Heap Visualization with PyPANDA and HeapInspect</span>
+                        </a>
+                    </span>
+                
+                
+                    <span class="button next">
+                        <a href="https://www.lukecraig.com/process_list/">
+                            <span class="button__text">PANDA Web server live process graph</span>&nbsp;
+                            <span class="button__icon">→</span>
+                        </a>
+                    </span>
+                </div>
+        </div>
+    
+    </div>
+
+    </div>
+
+    
+    <footer class="footer">
+        <div class="footer__inner">
+                <div class="copyright copyright--user"></div></div><div class="copyright">© 2021 Luke Craig</div></div>
+            </div>
+    </footer>
+    
+
+</div>
+</body>
+
+</html>

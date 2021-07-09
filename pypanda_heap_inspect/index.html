@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Easy Hypervisor Heap Visualization with PyPANDA and HeapInspect</title>
+    
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <meta name="robots" content="noodp"/>
+
+    <link rel="stylesheet" href="https://www.lukecraig.com/style.css">
+    <link rel="stylesheet" href="https://www.lukecraig.com/color/red.css">
+
+        <link rel="stylesheet" href="https://www.lukecraig.com/color/background_blue.css">
+    
+    <link rel="stylesheet" href="https://www.lukecraig.com/font-hack-subset.css">
+
+        <link rel="shortcut icon" type="image&#x2F;png" href="/favicon.png">
+    
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-W1PWMESBTD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-W1PWMESBTD');
+</script>
+</head>
+
+<body class="">
+<div class="container">
+    
+    <header class="header">
+        <div class="header__inner">
+            <div class="header__logo">
+                    
+                <a href="https://www.lukecraig.com" style="text-decoration: none;">
+                    <div class="logo">
+                            Luke Craig&#x27;s Blog
+                        </div>
+                </a>
+            </div>
+        </div>
+
+        <nav class="menu">
+            <ul class="menu__inner">
+                
+                <li class="active"><a href="https://www.lukecraig.com">blog</a></li>
+            
+                <li><a href="https://www.lukecraig.com/about">about</a></li>
+            
+                <li><a href="https://www.lukecraig.com/contact">contact</a></li>
+            
+                <li><a href="https://www.lukecraig.com/tags">tags</a></li>
+            
+                <li><a href="https://www.lukecraig.com/archive">archive</a></li>
+            
+                <li><a href="https://github.com/lacraig2" target="_blank" rel="noopener noreferrer">github</a></li>
+            
+                <li><a href="https://scholar.google.com/citations?user=Fooo078AAAAJ&hl=en&oi=ao" target="_blank" rel="noopener noreferrer">google scholar</a></li>
+            
+                <li><a href="https://twitter.com/_lukecraig" target="_blank" rel="noopener noreferrer">twitter</a></li>
+            </ul>
+        </nav>
+    
+    </header>
+    
+
+    <div class="content">
+        
+    <div class="post">
+        
+    <h1 class="post-title"><a href="https://www.lukecraig.com/pypanda_heap_inspect/">Easy Hypervisor Heap Visualization with PyPANDA and HeapInspect</a></h1>
+    <div class="post-meta-inline">
+        
+    <span class="post-date">
+            2021-06-03
+        </span>
+
+    </div>
+
+    
+        <span class="post-tags-inline">
+                :: tags:&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/panda/">#PANDA</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/pypanda/">#PyPANDA</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/heap/">#heap</a>&nbsp;
+                <a class="post-tag" href="https://www.lukecraig.com/tags/visualization/">#visualization</a></span>
+    
+
+        
+        <div class="post-content">
+            <h2 id="tldr">TLDR</h2>
+<p>I stumbled across <a href="https://github.com/matrix1001/heapinspect">heapinspect</a>: a fantastic heap visualizer project that uses the linux proc filesystem to interact with the system instead of integrating with a larger project like <code>gdb</code>. That portable design allowed me to &quot;hollow out&quot; the methods that mattered and integrate it with PyPANDA. With our integration we can construct heap visualizations on userland processes inside of the emulated host in PANDA.</p>
+<p>Currently the code is set up to work on <code>x86</code> and <code>x86_64</code>, but it should be trivial to extend do other architectures.</p>
+<p>Take a <a href="https://github.com/lacraig2/pandaheapinspect">look at the code</a> or see it in action with asciinema below.</p>
+<script id="asciicast-rVprCzFNOmAJKMgYw792EidGa" src="https://asciinema.org/a/rVprCzFNOmAJKMgYw792EidGa.js" async></script>
+<p>For more information on PyPANDA:</p>
+<ul>
+<li>Official Website: <a href="https://panda.re">panda.re</a></li>
+<li>Conference Paper: <a href="https://www.ndss-symposium.org/wp-content/uploads/bar2021_23001_paper.pdf">paper</a></li>
+<li>Conference Presentation: <a href="https://www.youtube.com/watch?v=_yNJV7oPHFI">video</a></li>
+</ul>
+<h2 id="introduction">Introduction</h2>
+<p>A few weeks back I was looking through an example in <a href="https://github.com/shellphish/how2heap">how2heap</a> when one of their recommended tools caught my eye. It said:</p>
+<blockquote>
+<p>heapinspect: A Python based heap playground with good visualization for educational purposes <a href="https://github.com/matrix1001/heapinspect">https://github.com/matrix1001/heapinspect</a></p>
+</blockquote>
+<p>I have looked at a number of heap visualization tools <a href="https://github.com/rogerhu/gdb-heap">built into gdb</a> or set up as <a href="https://github.com/wes4m/vheap">standalone web-apps</a> so I was surprised to see to see that <code>heapinspect</code> listed in its features that it was &quot;Free of gdb and other requirement&quot;. Because <code>heapinspect</code> did not require execution in the context of some larger tool (e.g. <code>gdb</code>) it was absolutely perfect for scooping up and integrating with PyPANDA.</p>
+<h2 id="heapinspect-overview">HeapInspect Overview</h2>
+<p><code>heapinspect</code> needs 4 basic information gathering methods to function:</p>
+<ul>
+<li>A method to get virtual memory mappings</li>
+<li>A method to read virtual memory</li>
+<li>Some information about the heap libc implementation</li>
+<li>A method to determine the current architecture</li>
+</ul>
+<p>Normally, <code>heapinspect</code> fulfills these requirements as follows:</p>
+<ul>
+<li>reads virtual memory mappings through <code>/proc/PID/maps</code><a href="https://github.com/matrix1001/heapinspect/blob/master/heapinspect/proc.py#L61">[1]</a></li>
+<li>reads virtual memory via <code>/proc/PID/mem</code> <a href="https://github.com/matrix1001/heapinspect/blob/master/heapinspect/proc.py#L259">[2]</a></li>
+<li>runs a custom program called <code>libc_info</code> to gather information the heap <a href="https://github.com/matrix1001/heapinspect/blob/master/heapinspect/libs/libc_info.c">[3]</a></li>
+<li>determines the architecture by reading the ELF header for libc <a href="https://github.com/matrix1001/heapinspect/blob/1b2f31c99357da8b8db7b4d0a99328b24e45adb1/heapinspect/common.py#L3">[4]</a></li>
+</ul>
+<h2 id="replacing-with-pypanda-logic">Replacing with PyPANDA logic</h2>
+<p>To get <code>heapinspect</code> working with PyPANDA all we need to do is replace these functions with ones that are compatible with PyPANDA and write a PyPANDA script so to call the heap inspect functions at some interesting point in execution.</p>
+<h3 id="reading-virtual-memory-mappings">Reading virtual memory mappings</h3>
+<p>PANDA uses the <a href="https://github.com/panda-re/panda/tree/master/panda/plugins/osi_linux">osi_linux</a> plugin to find memory mappings based on kernel structures located by a kernel profile. PyPANDA makes accessing this information very easy to access and use. We replace the old vmmap function with one that makes a call to <code>get_mappings</code> and add the mappings to an array that we return.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">vmmap</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">pid</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">panda </span><span style="color:#c0c5ce;">= </span><span style="color:#d08770;">None</span><span style="color:#c0c5ce;">):
+    </span><span style="color:#d08770;">...
+        </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">mapping </span><span style="color:#b48ead;">in </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">get_mappings</span><span style="color:#c0c5ce;">(panda.</span><span style="color:#bf616a;">get_cpu</span><span style="color:#c0c5ce;">()):
+            start = mapping.base
+            end   = mapping.base + mapping.size
+            perm  = &#39;</span><span style="color:#a3be8c;">rwx</span><span style="color:#c0c5ce;">&#39; </span><span style="color:#65737e;"># not used so we set rwx
+            # decode C string to Python string
+            </span><span style="color:#c0c5ce;">name  = panda.ffi.</span><span style="color:#bf616a;">string</span><span style="color:#c0c5ce;">(mapping.name).</span><span style="color:#bf616a;">decode</span><span style="color:#c0c5ce;">() 
+            maps.</span><span style="color:#bf616a;">append</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">Map</span><span style="color:#c0c5ce;">(start, end, perm, name))
+    ...
+    </span><span style="color:#b48ead;">return </span><span style="color:#c0c5ce;">maps
+</span></code></pre><h3 id="reading-virtual-memory">Reading virtual memory</h3>
+<p>PyPANDA makes reading virtual memory easy. It provides the <code>virtual_memory_read</code> <a href="https://docs.panda.re/panda.html#pandare.panda.Panda.virtual_memory_read">function</a> that simply asks for the relevant cpu, address, and length. Modeling this particular read was slightly complicated because it's important to the function of the overall program that we return an empty string if the virtual memory is completely unmapped, but fill in zeros in memory that partially exists (has gaps).</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">read</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">addr</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">size</span><span style="color:#c0c5ce;">):
+    any_output = </span><span style="color:#d08770;">False
+    </span><span style="color:#c0c5ce;">output = </span><span style="color:#b48ead;">b</span><span style="color:#c0c5ce;">&quot;&quot;
+    </span><span style="color:#b48ead;">while </span><span style="color:#96b5b4;">len</span><span style="color:#c0c5ce;">(output) &lt; size:
+        </span><span style="color:#b48ead;">try</span><span style="color:#c0c5ce;">:
+            </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">size &gt; </span><span style="color:#d08770;">0x1000</span><span style="color:#c0c5ce;">:
+                </span><span style="color:#65737e;"># read one page max at a time
+                </span><span style="color:#c0c5ce;">amount_to_read = </span><span style="color:#d08770;">0x1000
+            </span><span style="color:#b48ead;">else</span><span style="color:#c0c5ce;">:
+                </span><span style="color:#65737e;"># otherwise read the amount left
+                </span><span style="color:#c0c5ce;">amount_to_read = size - </span><span style="color:#96b5b4;">len</span><span style="color:#c0c5ce;">(output)
+            cpu = </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.panda.</span><span style="color:#bf616a;">get_cpu</span><span style="color:#c0c5ce;">()
+            output += </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.panda.</span><span style="color:#bf616a;">virtual_memory_read</span><span style="color:#c0c5ce;">(cpu, addr, amount_to_read)
+            any_output = </span><span style="color:#d08770;">True
+        </span><span style="color:#b48ead;">except</span><span style="color:#c0c5ce;">:
+            </span><span style="color:#65737e;"># virtual_memory_read throws an error if the address is unmapped
+            # we fill in zeros, but don&#39;t mark that we&#39;ve received output
+            </span><span style="color:#c0c5ce;">output += </span><span style="color:#b48ead;">b</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#96b5b4;">\x00</span><span style="color:#c0c5ce;">&quot;*</span><span style="color:#d08770;">0x1000
+        </span><span style="color:#65737e;"># we update regardless
+        </span><span style="color:#c0c5ce;">addr += </span><span style="color:#d08770;">0x1000
+    </span><span style="color:#65737e;"># only return result if we actually read something
+    </span><span style="color:#b48ead;">return </span><span style="color:#c0c5ce;">output </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">any_output </span><span style="color:#b48ead;">else </span><span style="color:#c0c5ce;">&#39;&#39;
+</span></code></pre><h3 id="gathering-information-about-the-heap-implementation">Gathering information about the heap implementation</h3>
+<p>There are a lot of ways of handling this particular issue. There are relatively easy ways to run binaries from your host on the PyPANDA machine. We skipped this problem by just allowing an option to specify the heap implementation arguments so it is <em>assumed</em> that one has run this program on a system ahead of time.</p>
+<h3 id="a-method-to-determine-architecture">A method to determine architecture</h3>
+<p>Determining the architecture is trivial for our use case because we are running our system within the context of a specific virtual machine. The <code>Panda</code> class maintains a reference to the machine type so we can just pass that information along and format it as <code>heapinspect</code> might want.</p>
+<h3 id="adding-to-a-pypanda-plugin">Adding to a PyPANDA plugin</h3>
+<p>Next, we pick an interesting place in our analysis to dissect. I made use of the new library-level symbol hooking functionality to hook <code>libc</code>:<code>malloc</code> and do our visualization there.</p>
+<p>Most of the code here is from the <a href="https://github.com/matrix1001/heapinspect/blob/master/HeapInspect.py">demo</a> from heapinspect. However, we place it inside our symbol hook we described, modified it to take our <code>arena_info</code>, which is the heap implementation details we decided to make arguments. Additionally, we have an argument provided for the Panda object itself.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#c0c5ce;">@panda.</span><span style="color:#bf616a;">hook_symbol</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">libc</span><span style="color:#c0c5ce;">&quot;,&quot;</span><span style="color:#a3be8c;">malloc</span><span style="color:#c0c5ce;">&quot;)
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">hook</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">cpu</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">tb</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">h</span><span style="color:#c0c5ce;">):
+    </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">f</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">Caught libc:malloc in </span><span style="color:#c0c5ce;">{panda.</span><span style="color:#bf616a;">get_process_name</span><span style="color:#c0c5ce;">(cpu)}&quot;)
+    </span><span style="color:#b48ead;">try</span><span style="color:#c0c5ce;">:
+        </span><span style="color:#b48ead;">global </span><span style="color:#c0c5ce;">pid, args
+        arena_info = {&quot;</span><span style="color:#a3be8c;">main_arena_offset</span><span style="color:#c0c5ce;">&quot;: </span><span style="color:#d08770;">4111432</span><span style="color:#c0c5ce;">,&quot;</span><span style="color:#a3be8c;">tcache_enable</span><span style="color:#c0c5ce;">&quot;: </span><span style="color:#d08770;">True</span><span style="color:#c0c5ce;">}
+        hi = </span><span style="color:#bf616a;">HeapInspector</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">,</span><span style="color:#bf616a;">panda</span><span style="color:#c0c5ce;">=panda,</span><span style="color:#bf616a;">arena_info</span><span style="color:#c0c5ce;">=arena_info)
+        </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">args.rela:
+            hs = </span><span style="color:#bf616a;">HeapShower</span><span style="color:#c0c5ce;">(hi)
+            hs.relative = </span><span style="color:#d08770;">True
+            </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">args.x:
+                </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.heap_chunks)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.fastbins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.unsortedbins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.smallbins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.largebins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.tcache_chunks)
+        </span><span style="color:#b48ead;">elif </span><span style="color:#c0c5ce;">args.raw:
+            hs = </span><span style="color:#bf616a;">HeapShower</span><span style="color:#c0c5ce;">(hi)
+            </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">args.x:
+                </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.heap_chunks)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.fastbins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.unsortedbins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.smallbins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.largebins)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(hs.tcache_chunks)
+        </span><span style="color:#b48ead;">else</span><span style="color:#c0c5ce;">:
+            pp = </span><span style="color:#bf616a;">PrettyPrinter</span><span style="color:#c0c5ce;">(hi)
+            </span><span style="color:#96b5b4;">print</span><span style="color:#c0c5ce;">(pp.all)
+    </span><span style="color:#b48ead;">except </span><span style="color:#c0c5ce;">Exception </span><span style="color:#b48ead;">as </span><span style="color:#c0c5ce;">e:
+        </span><span style="color:#b48ead;">raise </span><span style="color:#c0c5ce;">e
+    h.enabled = </span><span style="color:#d08770;">False
+    </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">end_analysis</span><span style="color:#c0c5ce;">()
+</span></code></pre>
+<p>Finally, we combine this callback with a machine willing to run it. We use PyPANDA's built-in guest interaction code to boot up a virtual machine, restore to a snapshot, and run some commands.</p>
+<pre style="background-color:#2b303b;">
+<code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span style="color:#c0c5ce;">pandare </span><span style="color:#b48ead;">import </span><span style="color:#c0c5ce;">Panda
+
+panda = </span><span style="color:#bf616a;">Panda</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">generic</span><span style="color:#c0c5ce;">=&quot;</span><span style="color:#a3be8c;">i386</span><span style="color:#c0c5ce;">&quot;)
+
+</span><span style="color:#65737e;"># above section would go here in the script
+
+</span><span style="color:#c0c5ce;">@panda.</span><span style="color:#bf616a;">queue_blocking
+</span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">guest_interaction</span><span style="color:#c0c5ce;">():
+    </span><span style="color:#65737e;"># revert to root snapshot
+    </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">revert_sync</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">root</span><span style="color:#c0c5ce;">&quot;)
+    </span><span style="color:#65737e;"># make sure the machine does something
+    </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">run_serial_cmd</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">ls -la &amp;&amp; whoami</span><span style="color:#c0c5ce;">&quot;)
+    </span><span style="color:#65737e;"># shut down the machine when we&#39;re done when we&#39;re done
+    </span><span style="color:#c0c5ce;">panda.</span><span style="color:#bf616a;">end_analysis</span><span style="color:#c0c5ce;">()
+
+panda.</span><span style="color:#bf616a;">run</span><span style="color:#c0c5ce;">()
+</span></code></pre><h2 id="conclusions">Conclusions</h2>
+<p>PyPANDA enables integration with powerful and interesting tooling. This was a fun tool to develop and the implementation was very fast. The writeup for this blog took far longer than the implementation.</p>
+
+        </div>
+
+        
+        <div class="pagination">
+            <div class="pagination__title">
+                <span class="pagination__title-h">Thanks for reading! Read other posts?</span>
+                <hr />
+            </div>
+            <div class="pagination__buttons">
+                
+                    <span class="button next">
+                        <a href="https://www.lukecraig.com/improving_bbo/">
+                            <span class="button__text">Making the basic buffer overflow demo more approachable</span>&nbsp;
+                            <span class="button__icon">→</span>
+                        </a>
+                    </span>
+                </div>
+        </div>
+    
+    </div>
+
+    </div>
+
+    
+    <footer class="footer">
+        <div class="footer__inner">
+                <div class="copyright copyright--user"></div></div><div class="copyright">© 2021 Luke Craig</div></div>
+            </div>
+    </footer>
+    
+
+</div>
+</body>
+
+</html>
